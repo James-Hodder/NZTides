@@ -2,7 +2,7 @@ import axios from 'axios';
 import { insertTideData } from './db';
 import { parseLinzCSV } from './tideParser';
 
-const LINZ_URL = 'https://example.com/tide-data.csv';
+const LINZ_URL = 'https://data.linz.govt.nz/layer/52101-tide-stations/';
 
 export const fetchAndStoreTides = async (location: string) => {
   try {

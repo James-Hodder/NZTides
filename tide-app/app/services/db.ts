@@ -1,36 +1,103 @@
-import * as SQLite from 'expo-sqlite';
-
-// Open the database safely
-const db = SQLite.openDatabase('tides.db');
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // --- INITIALIZE DB -----------------------------------------------------
 
-export const initDB = () => {
-  db.transaction(tx => {
-    tx.executeSql(
-      `
-      CREATE TABLE IF NOT EXISTS tide_predictions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        location TEXT NOT NULL,
-        date TEXT NOT NULL,
-        high1 TEXT,
-        high2 TEXT,
-        low1 TEXT,
-        low2 TEXT,
-        UNIQUE(location, date)
-      );
-      `,
-      [],
-      () => console.log("SQLite: tide_predictions table ready"),
-      (_, error) => {
-        console.error("SQLite create table error:", error);
-        return true;
-      }
-    );
-  });
+export const initDB = async () => {
+  try {
+    const existingData = await AsyncStorage.getItem('tide_predictions');
+    if (!existingData) {
+      // Initialize with an empty array if no data exists
+      await AsyncStorage.setItem('tide_predictions', JSON.stringify([]));
+      console.log('AsyncStorage: tide_predictions initialized');
+    } else {
+      console.log('AsyncStorage: tide_predictions already exists');
+    }
+  } catch (error) {
+    console.error('AsyncStorage initialization error:', error);
+  }
+};
+// Export the `getTidesByLocation` function to make it available for import.
+
+export const getTidesByLocation = async (location: string, callback: (data: any[]) => void): Promise<void> => {
+  const db = await AsyncStorage.getItem('tide_predictions'); // Simulating db as AsyncStorage data
+  if (!db) {
+    callback([]);
+    return;
+  }
+
+  const predictions = JSON.parse(db).filter((p: { location: string }) => p.location === location);
+  callback(predictions);
 };
 
-// --- INSERT ROW --------------------------------------------------------
+// --- ADD A RECORD -----------------------------------------------------
+
+export const addTidePrediction = async (prediction: {
+  location: string;
+  date: string;
+  high1?: string;
+  high2?: string;
+  low1?: string;
+  low2?: string;
+}) => {
+  try {
+    const data = await AsyncStorage.getItem('tide_predictions');
+    const predictions = data ? JSON.parse(data) : [];
+
+    // Check for duplicates based on location and date
+    const exists = predictions.some(
+      (p: { location: string; date: string }) =>
+        p.location === prediction.location && p.date === prediction.date
+    );
+
+    if (exists) {
+      console.error('Duplicate entry detected');
+      return;
+    }
+
+    predictions.push(prediction);
+    await AsyncStorage.setItem('tide_predictions', JSON.stringify(predictions));
+    console.log('AsyncStorage: Prediction added');
+  } catch (error) {
+    console.error('AsyncStorage add error:', error);
+  }
+};
+
+// --- GET ALL RECORDS --------------------------------------------------
+
+export const getTidePredictions = async () => {
+  try {
+    const data = await AsyncStorage.getItem('tide_predictions');
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('AsyncStorage get error:', error);
+    return [];
+  }
+};
+
+// --- DELETE A RECORD --------------------------------------------------
+
+export const deleteTidePrediction = async (location: string, date: string) => {
+  try {
+    const data = await AsyncStorage.getItem('tide_predictions');
+    const predictions = data ? JSON.parse(data) : [];
+
+    const updatedPredictions = predictions.filter(
+      (p: { location: string; date: string }) =>
+        p.location !== location || p.date !== date
+    );
+
+    await AsyncStorage.setItem(
+      'tide_predictions',
+      JSON.stringify(updatedPredictions)
+    );
+    console.log('AsyncStorage: Prediction deleted');
+  } catch (error) {
+    console.error('AsyncStorage delete error:', error);
+  }
+};
+
+
+// Export the insertTideData function
 
 export const insertTideData = (
   location: string,
@@ -39,70 +106,7 @@ export const insertTideData = (
   high2?: string,
   low1?: string,
   low2?: string
-) => {
-  db.transaction(tx => {
-    tx.executeSql(
-      `
-      INSERT OR REPLACE INTO tide_predictions 
-      (location, date, high1, high2, low1, low2)
-      VALUES (?, ?, ?, ?, ?, ?);
-      `,
-      [location, date, high1 ?? null, high2 ?? null, low1 ?? null, low2 ?? null],
-      () => console.log(`Inserted tide data for ${location} on ${date}`),
-      (_, error) => {
-        console.error("SQLite insert error:", error);
-        return true;
-      }
-    );
-  });
+): void => {
+  console.error('insertTideData function is not implemented.');
 };
 
-// --- GET TIDES FOR ONE LOCATION ---------------------------------------
-
-export const getTidesByLocation = (
-  location: string,
-  callback: (rows: any[]) => void
-) => {
-  db.transaction(tx => {
-    tx.executeSql(
-      `
-      SELECT * 
-      FROM tide_predictions 
-      WHERE location = ?
-      ORDER BY date ASC;
-      `,
-      [location],
-      (_, result) => {
-        callback(result.rows._array);
-      },
-      (_, error) => {
-        console.error("SQLite SELECT error:", error);
-        return true;
-      }
-    );
-  });
-};
-
-// --- OPTIONAL: Promise version ----------------------------------------
-
-export const getTidesByLocationAsync = (location: string): Promise<any[]> => {
-  return new Promise((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        `
-        SELECT * 
-        FROM tide_predictions 
-        WHERE location = ?
-        ORDER BY date ASC;
-        `,
-        [location],
-        (_, result) => resolve(result.rows._array),
-        (_, error) => {
-          console.error("SQLite SELECT error:", error);
-          reject(error);
-          return true;
-        }
-      );
-    });
-  });
-};
